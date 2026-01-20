@@ -1,5 +1,5 @@
 # ============================================================
-# HARD SAFETY: disable meta tensors globally
+# HARD SAFETY — must be first
 # ============================================================
 import os
 os.environ["TRANSFORMERS_NO_META"] = "1"
@@ -9,12 +9,14 @@ os.environ["TOKENIZERS_PARALLELISM"] = "false"
 import torch
 from datasets import load_dataset
 from transformers import (
+    AutoConfig,
     AutoTokenizer,
     AutoModelForSeq2SeqLM,
     DataCollatorForSeq2Seq,
     Trainer,
     TrainingArguments,
 )
+from accelerate import init_empty_weights, load_checkpoint_and_dispatch
 
 assert torch.cuda.is_available(), "CUDA GPU required"
 
@@ -25,7 +27,7 @@ MODEL_NAME = "facebook/nllb-200-distilled-600M"
 
 MAX_LEN = 512
 BATCH_SIZE = 4
-GRAD_ACCUM = 8              
+GRAD_ACCUM = 8
 LR = 3e-5
 MAX_STEPS = 8000
 WARMUP_STEPS = 800
@@ -42,17 +44,23 @@ tokenizer = AutoTokenizer.from_pretrained(
 )
 
 # ============================================================
-# MODEL  
+# MODEL (NO META → NO .to() → NO CRASH)
 # ============================================================
+config = AutoConfig.from_pretrained(MODEL_NAME)
+config.use_cache = False
 
-model = AutoModelForSeq2SeqLM.from_pretrained(
+# 1️⃣ Build empty model (no tensors allocated)
+with init_empty_weights():
+    model = AutoModelForSeq2SeqLM.from_config(config)
+
+# 2️⃣ Load checkpoints directly onto GPU
+model = load_checkpoint_and_dispatch(
+    model,
     MODEL_NAME,
-    use_safetensors=True,
-    device_map="cuda",              
-    torch_dtype=torch.bfloat16      
+    device_map={"": "cuda"},
+    dtype=torch.bfloat16,
 )
 
-model.config.use_cache = False
 model.gradient_checkpointing_enable()
 model.train()
 
@@ -114,7 +122,7 @@ training_args = TrainingArguments(
 
     report_to="none",
     dataloader_num_workers=4,
-    disable_tqdm=False
+    disable_tqdm=False,
 )
 
 # ============================================================
