@@ -20,6 +20,13 @@ from accelerate import init_empty_weights, load_checkpoint_and_dispatch
 
 assert torch.cuda.is_available(), "CUDA GPU required"
 
+from huggingface_hub import snapshot_download
+
+LOCAL_MODEL_DIR = snapshot_download(
+    repo_id="facebook/nllb-200-distilled-600M",
+    allow_patterns=["*.safetensors", "*.json", "*.model"]
+)
+
 # ============================================================
 # CONFIG (H200 OPTIMIZED)
 # ============================================================
@@ -46,17 +53,20 @@ tokenizer = AutoTokenizer.from_pretrained(
 # ============================================================
 # MODEL (NO META → NO .to() → NO CRASH)
 # ============================================================
-config = AutoConfig.from_pretrained(MODEL_NAME)
+config = AutoConfig.from_pretrained(LOCAL_MODEL_DIR)
 config.use_cache = False
 
-# 1️⃣ Build empty model (no tensors allocated)
+# 1️⃣ Build empty model
 with init_empty_weights():
     model = AutoModelForSeq2SeqLM.from_config(config)
 
-# 2️⃣ Load checkpoints directly onto GPU
+# 2️⃣ Tie embeddings (REQUIRED)
+model.tie_weights()
+
+# 3️⃣ Load pretrained weights directly onto GPU
 model = load_checkpoint_and_dispatch(
     model,
-    MODEL_NAME,
+    checkpoint=LOCAL_MODEL_DIR,     # 🔑 LOCAL PATH, NOT REPO ID
     device_map={"": "cuda"},
     dtype=torch.bfloat16,
 )
