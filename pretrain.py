@@ -17,17 +17,9 @@ from transformers import (
     TrainingArguments,
 )
 from accelerate import init_empty_weights, load_checkpoint_and_dispatch
-
 from huggingface_hub import snapshot_download
-SNAPSHOT_DIR = snapshot_download(
-    repo_id="facebook/nllb-200-distilled-600M",
-)
 
-# 🔑 NLLB stores weights in a subfolder
-LOCAL_MODEL_DIR = os.path.join(
-    SNAPSHOT_DIR,
-    "nllb-200-distilled-600M"
-)
+assert torch.cuda.is_available(), "CUDA GPU required"
 
 # ============================================================
 # CONFIG (H200 OPTIMIZED)
@@ -45,6 +37,20 @@ SAVE_DIR = "./pretrained-nllb-akk"
 DATA_FILE = "generated/pretrain.src.txt"
 
 # ============================================================
+# DOWNLOAD PRETRAINED CHECKPOINT (SHARDED)
+# ============================================================
+# IMPORTANT:
+# - This directory ALREADY contains:
+#   config.json
+#   model.safetensors.index.json
+#   model-0000x-of-0000y.safetensors
+# - DO NOT append subfolders
+# ============================================================
+LOCAL_MODEL_DIR = snapshot_download(
+    repo_id=MODEL_NAME
+)
+
+# ============================================================
 # TOKENIZER
 # ============================================================
 tokenizer = AutoTokenizer.from_pretrained(
@@ -53,22 +59,23 @@ tokenizer = AutoTokenizer.from_pretrained(
 )
 
 # ============================================================
-# MODEL (NO META → NO .to() → NO CRASH)
+# MODEL (META-SAFE, CLUSTER-SAFE)
 # ============================================================
+# 1) Load config from SNAPSHOT ROOT
 config = AutoConfig.from_pretrained(LOCAL_MODEL_DIR)
 config.use_cache = False
 
-# 1️⃣ Build empty architecture
+# 2) Build empty architecture (no tensors allocated)
 with init_empty_weights():
     model = AutoModelForSeq2SeqLM.from_config(config)
 
-# 2️⃣ Tie weights (required)
+# 3) Tie embeddings (REQUIRED for seq2seq models)
 model.tie_weights()
 
-# 3️⃣ Load sharded checkpoint directly to GPU
+# 4) Load sharded checkpoint directly onto GPU
 model = load_checkpoint_and_dispatch(
     model,
-    checkpoint=LOCAL_MODEL_DIR,   # snapshot root (has index.json)
+    checkpoint=LOCAL_MODEL_DIR,   # SNAPSHOT ROOT
     device_map={"": "cuda"},
     dtype=torch.bfloat16,
 )
