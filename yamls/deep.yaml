@@ -40,9 +40,4 @@ spec:
 
           resources:
             limits:
-              # choose ONE depending on your cluster setup
-              # Full H200 / A100 style
-              nvidia.com/gpu: 1
-
-              # OR MIG (example – adjust to your cluster)
-              # nvidia.com/mig-3g.71gb: 1
+              nvidia.com/mig-2g.35gb: 1
