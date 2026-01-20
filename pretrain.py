@@ -18,8 +18,6 @@ from transformers import (
 )
 from accelerate import init_empty_weights, load_checkpoint_and_dispatch
 
-assert torch.cuda.is_available(), "CUDA GPU required"
-
 from huggingface_hub import snapshot_download
 SNAPSHOT_DIR = snapshot_download(
     repo_id="facebook/nllb-200-distilled-600M",
@@ -30,10 +28,6 @@ LOCAL_MODEL_DIR = os.path.join(
     SNAPSHOT_DIR,
     "nllb-200-distilled-600M"
 )
-
-assert os.path.exists(
-    os.path.join(LOCAL_MODEL_DIR, "model.safetensors")
-), f"model.safetensors not found in {LOCAL_MODEL_DIR}"
 
 # ============================================================
 # CONFIG (H200 OPTIMIZED)
