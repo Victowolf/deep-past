@@ -1,0 +1,48 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: pretrain-job
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: nllb-pretrain-container
+          image: nvcr.io/nvidia/pytorch:24.03-py3
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              set -euo pipefail
+              echo "=== Starting NLLB Domain Pretraining Job ==="
+
+              # workspace
+              mkdir -p /workspace
+              cd /workspace
+
+              echo "[1] Cloning Deep Past MT repository..."
+              rm -rf deep-past-mt || true
+              git clone https://github.com/Victowolf/deep-past deep-past-mt
+
+              cd deep-past-mt || (echo "ERROR: repo not found"; exit 1)
+
+              echo "[2] Installing Python dependencies..."
+              pip install --upgrade pip
+              pip install transformers datasets accelerate sentencepiece tqdm
+
+              echo "[3] Checking GPU availability..."
+              nvidia-smi
+
+              echo "[4] Starting domain-adaptive pretraining..."
+              python pretrain.py
+
+              echo "=== Pretraining Job Completed Successfully ==="
+
+          resources:
+            limits:
+              # choose ONE depending on your cluster setup
+              # Full H200 / A100 style
+              nvidia.com/gpu: 1
+
+              # OR MIG (example – adjust to your cluster)
+              # nvidia.com/mig-3g.71gb: 1
