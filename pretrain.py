@@ -23,7 +23,6 @@ assert torch.cuda.is_available(), "CUDA GPU required"
 from huggingface_hub import snapshot_download
 SNAPSHOT_DIR = snapshot_download(
     repo_id="facebook/nllb-200-distilled-600M",
-    allow_patterns=["*.safetensors", "*.json", "*.model"]
 )
 
 # 🔑 NLLB stores weights in a subfolder
@@ -65,17 +64,17 @@ tokenizer = AutoTokenizer.from_pretrained(
 config = AutoConfig.from_pretrained(LOCAL_MODEL_DIR)
 config.use_cache = False
 
-# 1️⃣ Build empty model
+# 1️⃣ Build empty architecture
 with init_empty_weights():
     model = AutoModelForSeq2SeqLM.from_config(config)
 
-# 2️⃣ Tie embeddings (REQUIRED)
+# 2️⃣ Tie weights (required)
 model.tie_weights()
 
-# 3️⃣ Load pretrained weights directly onto GPU
+# 3️⃣ Load sharded checkpoint directly to GPU
 model = load_checkpoint_and_dispatch(
     model,
-    checkpoint=LOCAL_MODEL_DIR,     # 🔑 LOCAL PATH, NOT REPO ID
+    checkpoint=LOCAL_MODEL_DIR,   # snapshot root (has index.json)
     device_map={"": "cuda"},
     dtype=torch.bfloat16,
 )
