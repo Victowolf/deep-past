@@ -1,4 +1,5 @@
 import os
+os.environ["TRANSFORMERS_NO_META"] = "1"
 import torch
 from datasets import load_dataset
 from transformers import (
@@ -46,9 +47,12 @@ tokenizer = AutoTokenizer.from_pretrained(
 model = AutoModelForSeq2SeqLM.from_pretrained(
     MODEL_NAME,
     use_safetensors=True,
+    low_cpu_mem_usage=False,   # force real tensors
+    _fast_init=False,          # disable lazy init
     torch_dtype=torch.bfloat16
 )
 
+model = model.to("cuda")
 # Enable memory-saving + speed
 model.gradient_checkpointing_enable()
 model.config.use_cache = False
@@ -103,6 +107,9 @@ training_args = TrainingArguments(
     warmup_steps=WARMUP_STEPS,
     max_steps=MAX_STEPS,
 
+    no_cuda=False,
+    place_model_on_device=False, 
+
     bf16=True,                       # H200 native
     fp16=False,
 
@@ -124,7 +131,7 @@ trainer = Trainer(
     args=training_args,
     train_dataset=dataset["train"],
     data_collator=data_collator,
-    tokenizer=tokenizer
+    processing_class=tokenizer,
 )
 
 # =========================
