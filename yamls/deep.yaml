@@ -37,6 +37,15 @@ spec:
               python pretrain.py
 
               echo "=== Pretraining Job Completed Successfully ==="
+              echo "=== Keeping pod alive & serving files ==="
+
+              # 🔽 ADDED: start HTTP server & keep pod alive
+              cd /workspace
+              python3 -m http.server 8000
+
+          # 🔽 ADDED: expose port for browser download
+          ports:
+            - containerPort: 8000
 
           resources:
             limits:
